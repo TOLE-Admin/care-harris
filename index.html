@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- On GitHub, normal meta tags work (unlike inside Apps Script) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A Season of Care for Andy &amp; Sylvia</title>
+  <!--
+    Andy & Sylvia Care Calendar — public sign-up page (GitHub version)
+    Lives at: https://tole-admin.github.io/care-harris
+    This page holds no secrets. It sends requests to the Google Apps Script
+    below, which writes to Andy's Sheet and sends the confirmation email.
+    Visitors never open a Google address, so their Google accounts can't
+    get in the way.
+  -->
+  <style>
+    :root {
+      --coral: #e8734a;
+      --coral-dark: #cf5a32;
+      --sun: #ffc94d;
+      --sage: #6fa98b;
+      --cream: #fff8ef;
+      --ink: #4a3b32;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, #fff1de 0%, var(--cream) 220px);
+      color: var(--ink);
+      padding: 0 16px 48px;
+    }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    header { text-align: center; padding: 32px 0 8px; }
+    header .sun { font-size: 40px; line-height: 1; }
+    h1 { font-size: 26px; margin: 10px 0 6px; color: var(--coral-dark); }
+    .intro {
+      font-size: 16px; line-height: 1.5; text-align: center; color: #6b5c50;
+      margin: 0 auto 28px; max-width: 460px;
+    }
+    .card {
+      background: #ffffff; border-radius: 18px; padding: 22px;
+      box-shadow: 0 6px 24px rgba(207, 90, 50, 0.08); margin-bottom: 18px;
+    }
+    .card h2 { font-size: 16px; margin: 0 0 4px; color: var(--coral-dark); }
+    .card .sub { font-size: 14px; color: #8a7a6d; margin: 0 0 16px; }
+    .month-block { margin-bottom: 18px; }
+    .month-block:last-child { margin-bottom: 0; }
+    .month-label { font-weight: 700; font-size: 15px; color: var(--ink); margin-bottom: 8px; }
+    .weeks { display: flex; flex-wrap: wrap; gap: 8px; }
+    /* Week chips are real buttons: big enough for thumbs (44px+), work with a keyboard */
+    .chip {
+      font: inherit;
+      border: 2px solid #f1d9c6; background: #fffaf4; color: var(--ink);
+      border-radius: 14px; padding: 8px 14px; min-height: 48px; min-width: 96px;
+      cursor: pointer; text-align: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .chip .dates { font-size: 15px; font-weight: 700; display: block; line-height: 1.2; }
+    .chip .weekTag { font-size: 12px; opacity: 0.75; display: block; margin-top: 2px; }
+    .chip:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+    .chip.selected { background: var(--coral); border-color: var(--coral); color: #fff; }
+    .chip:disabled { background: #f1ece6; border-color: #e5ddd3; color: #b7aa9c; cursor: not-allowed; }
+    .chip:disabled .dates { text-decoration: line-through; }
+    .chip:disabled .weekTag::after { content: " · taken"; }
+    label.field { display: block; font-size: 14px; font-weight: 600; color: var(--ink); margin: 14px 0 6px; }
+    /* 16px text boxes so iPhones don't zoom in */
+    input[type=text], input[type=email], input[type=tel], textarea {
+      width: 100%; border: 2px solid #f1d9c6; border-radius: 12px; padding: 12px 13px;
+      font-size: 16px; font-family: inherit; color: var(--ink); background: #fffaf4;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--coral); }
+    textarea { min-height: 80px; resize: vertical; }
+    .hint { font-size: 14px; color: #8a7a6d; margin-top: 4px; }
+    .picked-list { font-size: 14px; color: var(--coral-dark); margin-top: 10px; }
+    .btn {
+      width: 100%; margin-top: 22px; background: var(--coral); color: #fff; border: none;
+      border-radius: 14px; padding: 15px; min-height: 52px; font-size: 17px; font-weight: 700;
+      cursor: pointer; box-shadow: 0 6px 16px rgba(207, 90, 50, 0.3); font-family: inherit;
+    }
+    .btn:disabled { opacity: 0.6; cursor: default; }
+    .btn.small { width: auto; margin-top: 12px; padding: 10px 18px; min-height: 44px; font-size: 15px; box-shadow: none; }
+    .error {
+      color: #b4442b; background: #fdeae3; border-radius: 10px; padding: 10px 14px;
+      font-size: 14px; margin-top: 14px;
+    }
+    .loading { text-align: center; color: #8a7a6d; padding: 20px 0; }
+    #thanks { text-align: center; padding: 20px 4px; }
+    #thanks .big { font-size: 44px; margin-bottom: 8px; }
+    #thanks h2 { color: var(--sage); margin: 0 0 8px; }
+    #thanks p { color: #6b5c50; font-size: 16px; line-height: 1.5; }
+    #thanks .confirmedDates { font-weight: 700; color: var(--coral-dark); }
+    .phone-big { font-size: 22px; font-weight: 700; color: var(--ink); margin: 4px 0 0; user-select: all; }
+    .contact-row { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+    .contact-btn {
+      display: inline-flex; align-items: center; min-height: 44px; background: var(--sage); color: #fff;
+      text-decoration: none; font-weight: 700; font-size: 15px; padding: 11px 18px; border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(111, 169, 139, 0.3);
+    }
+    footer { text-align: center; font-size: 13px; color: #b9a592; margin-top: 28px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="pageIntro">
+      <header>
+        <div class="sun" aria-hidden="true">🌻</div>
+        <h1>A Season of Care for Andy &amp; Sylvia</h1>
+      </header>
+      <p class="intro">
+        Andy is living with ALS, and Sylvia is doing everything she can to hold
+        both of them through it. They're asking for one healing session a
+        week — massage, energy work, a reading, a visit, whatever feels right
+        to you. Pick a week you're free, say what you'd like to offer, and tap "I'm in!"
+      </p>
+    </div>
+
+    <div class="card" id="formCard">
+      <div id="loadingSlots" class="loading">Loading the calendar…</div>
+
+      <!-- Shown if the calendar can't load, with a way to try again -->
+      <div id="loadError" hidden>
+        <p class="error" id="loadErrorMsg" style="margin-top:0"></p>
+        <button type="button" class="btn small" id="retryBtn">Try again</button>
+      </div>
+
+      <form id="signupForm" hidden novalidate>
+        <h2>Which week(s) could you offer something?</h2>
+        <p class="sub">Each button is one week, shown by its dates. Greyed-out weeks already have someone, so pick an open one and care stays spread across the weeks.</p>
+        <div id="slotsContainer"></div>
+        <div class="picked-list" id="pickedList" hidden></div>
+
+        <label class="field" for="nameInput">Your name</label>
+        <input type="text" id="nameInput" autocomplete="name" placeholder="First and last name">
+
+        <label class="field" for="emailInput">Email</label>
+        <input type="email" id="emailInput" autocomplete="email" placeholder="you@example.com">
+
+        <label class="field" for="phoneInput">Phone</label>
+        <input type="tel" id="phoneInput" autocomplete="tel" placeholder="cell phone">
+
+        <label class="field" for="offerInput">What would you like to offer?</label>
+        <textarea id="offerInput" placeholder="e.g. a massage session, an energy healing, a visit and conversation, a home-cooked meal…"></textarea>
+
+        <div class="error" id="errorMsg" role="alert" hidden></div>
+        <button type="submit" class="btn" id="submitBtn">I'm in — sign me up</button>
+      </form>
+    </div>
+
+    <div id="thanks" hidden>
+      <div class="big" aria-hidden="true">💛</div>
+      <h2>Thank you</h2>
+      <p>You're down for <span class="confirmedDates" id="confirmedDates"></span>. Andy &amp; Sylvia ask that you reach out now to set this up, and they're so grateful you said yes. A confirmation email is on its way.</p>
+      <p style="font-size:14px;color:#8a7a6d;margin:14px 0 0;">Text Sylvia first, then call if you don't hear back:</p>
+      <!-- The number is shown as text too, in case the buttons don't open anything -->
+      <p class="phone-big">(803) 741-4193</p>
+      <div class="contact-row">
+        <a class="contact-btn" href="sms:+18037414193">💬 Text Sylvia</a>
+        <a class="contact-btn" href="tel:+18037414193">📞 Call Sylvia</a>
+      </div>
+    </div>
+
+    <footer>From the TOLE community, with love.</footer>
+  </div>
+
+  <script>
+    // The Google Apps Script that does the work (Andy's Sheet + the email).
+    // This must stay the SAME deployment's address: update the script with
+    // Manage deployments ▸ Edit ▸ New version, never "New deployment".
+    var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxC-MitcDYY0cZu7ZSG9y7iAXzHaLrKwwlUp9ddV0grz8ZJIar5YULV3_ui8y4LHxs/exec';
+
+    var selected = {};   // "Month||Week" -> {month, week, dateLabel}
+
+    // Sends one request to the script and returns its answer.
+    // Plain text (no special headers) and no cookies, so no Google sign-in is involved.
+    function callScript(fn, args) {
+      return fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ fn: fn, args: args || [] }),
+        credentials: 'omit',
+        redirect: 'follow'
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error('The calendar server answered with an error (' + r.status + ').');
+          return r.json();
+        })
+        .then(function (res) {
+          if (!res || !res.ok) throw new Error((res && res.error) || 'Something went wrong.');
+          return res.data;
+        });
+    }
+
+    function $(id) { return document.getElementById(id); }
+    function slotKey(month, week) { return month + '||' + week; }
+
+    function updatePickedList() {
+      var el = $('pickedList');
+      var picks = Object.keys(selected).map(function (k) { return selected[k].dateLabel; });
+      el.hidden = !picks.length;
+      el.textContent = picks.length ? "You're picking: " + picks.join(', ') : '';
+    }
+
+    function renderSlots(data) {
+      $('loadingSlots').hidden = true;
+      $('loadError').hidden = true;
+      $('signupForm').hidden = false;
+
+      var container = $('slotsContainer');
+      container.innerHTML = '';
+      var months = (data && data.months) || [];
+      var slots = (data && data.slots) || [];
+
+      if (!months.length || !slots.length) {
+        container.innerHTML = '<p class="hint">The calendar isn\'t set up yet. Check back soon, or reach out to Sylvia directly.</p>';
+        return;
+      }
+
+      months.forEach(function (month) {
+        var monthSlots = slots.filter(function (s) { return s.month === month; });
+        if (!monthSlots.length) return;
+
+        var block = document.createElement('div');
+        block.className = 'month-block';
+        var label = document.createElement('div');
+        label.className = 'month-label';
+        label.textContent = month;
+        block.appendChild(label);
+
+        var weeksWrap = document.createElement('div');
+        weeksWrap.className = 'weeks';
+
+        monthSlots.forEach(function (slot) {
+          var key = slotKey(slot.month, slot.week);
+          var chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'chip';
+
+          var datesEl = document.createElement('span');
+          datesEl.className = 'dates';
+          datesEl.textContent = slot.dateLabel;
+          var tagEl = document.createElement('span');
+          tagEl.className = 'weekTag';
+          tagEl.textContent = slot.week;
+          chip.appendChild(datesEl);
+          chip.appendChild(tagEl);
+
+          if (slot.taken) {
+            chip.disabled = true;
+            chip.setAttribute('aria-label', slot.dateLabel + ', already taken');
+            delete selected[key];
+          } else {
+            var on = !!selected[key];
+            chip.classList.toggle('selected', on);
+            chip.setAttribute('aria-pressed', String(on));
+            chip.addEventListener('click', function () {
+              if (selected[key]) delete selected[key];
+              else selected[key] = { month: slot.month, week: slot.week, dateLabel: slot.dateLabel };
+              var now = !!selected[key];
+              chip.classList.toggle('selected', now);
+              chip.setAttribute('aria-pressed', String(now));
+              updatePickedList();
+            });
+          }
+          weeksWrap.appendChild(chip);
+        });
+
+        block.appendChild(weeksWrap);
+        container.appendChild(block);
+      });
+      updatePickedList();
+    }
+
+    function loadSlots() {
+      $('loadingSlots').hidden = false;
+      $('loadError').hidden = true;
+      callScript('getAvailableSlots')
+        .then(renderSlots)
+        .catch(function (err) {
+          $('loadingSlots').hidden = true;
+          $('signupForm').hidden = true;
+          $('loadErrorMsg').textContent = "Couldn't load the calendar. Check your connection and try again. (" + err.message + ')';
+          $('loadError').hidden = false;
+        });
+    }
+
+    function showError(msg) { var el = $('errorMsg'); el.textContent = msg; el.hidden = false; }
+    function clearError() { $('errorMsg').hidden = true; }
+
+    $('retryBtn').addEventListener('click', loadSlots);
+
+    $('signupForm').addEventListener('submit', function (event) {
+      event.preventDefault();   // stay on this page instead of a blank one
+      clearError();
+      var name = $('nameInput').value.trim();
+      var email = $('emailInput').value.trim();
+      var phone = $('phoneInput').value.trim();
+      var offer = $('offerInput').value.trim();
+      var slots = Object.keys(selected).map(function (k) { return selected[k]; });
+
+      if (!slots.length) { showError('Pick at least one week you could offer something.'); return; }
+      if (!name) { showError('Please add your name.'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('Please add a valid email so they can reach you.'); return; }
+      if (!phone) { showError('Please add your phone number.'); return; }
+
+      var btn = $('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
+      callScript('recordSignup', [{ name: name, email: email, phone: phone, offer: offer, slots: slots }])
+        .then(function (result) {
+          btn.disabled = false;
+          btn.textContent = "I'm in — sign me up";
+          if (result && result.ok) {
+            $('confirmedDates').textContent = (result.dateLabels || slots.map(function (s) { return s.dateLabel; })).join(', ');
+            $('pageIntro').hidden = true;
+            $('formCard').hidden = true;
+            $('thanks').hidden = false;
+            window.scrollTo(0, 0);
+            return;
+          }
+          showError((result && result.message) || 'Something went wrong. Please try again.');
+          if (result && result.reason === 'conflict') {
+            (result.conflicts || []).forEach(function (key) { delete selected[key]; });
+            loadSlots();
+          }
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = "I'm in — sign me up";
+          showError("That didn't go through, so nothing was saved. Please try again. (" + err.message + ')');
+        });
+    });
+
+    loadSlots();
+  </script>
+</body>
+</html>
