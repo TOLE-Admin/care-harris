@@ -172,15 +172,14 @@
 
     var selected = {};   // "Month||Week" -> {month, week, dateLabel}
 
-    // Sends one request to the script and returns its answer.
-    // Plain text (no special headers) and no cookies, so no Google sign-in is involved.
+    // Asks the script for something and returns its answer.
+    // A plain page request (no cookies), so no Google sign-in is involved.
+    // (v3: Google refused "send" requests to TOLE's Workspace script, so this
+    // asks through the script's front door with the details after a "?".)
     function callScript(fn, args) {
-      return fetch(SCRIPT_URL, {
-        method: 'POST',
-        body: JSON.stringify({ fn: fn, args: args || [] }),
-        credentials: 'omit',
-        redirect: 'follow'
-      })
+      var url = SCRIPT_URL + '?fn=' + encodeURIComponent(fn) +
+        '&args=' + encodeURIComponent(JSON.stringify(args || []));
+      return fetch(url, { method: 'GET', credentials: 'omit', redirect: 'follow' })
         .then(function (r) {
           if (!r.ok) throw new Error('The calendar server answered with an error (' + r.status + ').');
           return r.json();
